@@ -7,9 +7,10 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	output [1:0] EXCEPTION;
 	
 	
-// Testbench
+
 endmodule
 
+// Testbench
 module tb_Divider;
 	reg clk, reset;
 	reg [31:0] a, b;
