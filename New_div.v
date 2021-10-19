@@ -5,121 +5,42 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	output [31:0] AbyB;
 	output DONE;
 	output [1:0] EXCEPTION;
-	
-	wire [31:0] O;
-	assign AbyB = O;
-	
-	wire [7:0] a_exponent;
-	wire [23:0] a_mantissa;
-	wire [7:0] b_exponent;
-	wire [23:0] b_mantissa;
-	
-	reg o_sign;
-	reg [7:0] o_exponent;
-	reg [24:0] o_mantissa;
-	
-	reg [31:0] divider_a_in;
-	reg [31:0] divider_b_in;
-	wire[31:0] divider_out;
-	
-	reg [1:0] exception
-	assign EXCEPTION = exception;
-	
-	wire [1:0] overflow_undeflow; // 00 normal operation, 01 underflow, 10 overflow 
-	
-	assign a_sign = InputA[31];
-	assign a_exponent[7:0] = InputA[30:23];
-	assign a_mantissa[23:0] = {1'b1, InputA[22:0]};
-	
-	assign b_sign = InputB[31];
-	assign b_exponent[7:0] = InputB[30:23];
-	assign b_mantissa[7:0] = {1'b1, InputB[22:0]};
-	
-	assign O[31] = o_sign;
-	assign O[30:23] = o_exponent;
-	assign O[22:0] = o_mantissa[22:0];
-	
+		
 	divider D1
 	(
-		.a(divider_a_in),
-		.b(divider_b_in),
-		.out(divider_out),
-		.of_uf(overflow_undeflow)
+		.a(InputA),
+		.b(InputB),
+		.out(AbyB)
 	);
+	assign DONE = 1'b1;
 	
-	always @(posedge clk or posedge RESET) begin
-		if(RESET) begin
-			done = 0;
-			divider_out = 32'b0;
-			
-		end else begin
-			if(done == 0)  begin
-				if((b_exponent == 0) && (b_mantissa == 0)) begin
-					exception = 2'b00; // Divide by zero
-				end else if ((a_exponent == 255 && a_mantissa != 0) || (b_exponent == 255 && b_mantissa != 0)) begin
-					exception = 2'b11; // A or B are NaN
-				end else if ((a_exponent == 255 ) || (b_exponent == 255)) begin
-					exception = 2'b11; // Operands are infinity
-				end else if ((overflow_undeflow != 2'b00)) begin
-					exception = overflow_undeflow;
-				end else begin
-					divider_a_in = InputA;
-					divider_b_in = InputB;
-					o_sign = divider_out[31];
-					o_exponent = divider_out[30:23];
-					o_mantissa = divider_out[22:0];
-				end
-				done = 1;
-			end
-		end
-	end
-
 endmodule
 
-module divider(a, b, out, of_uf);
+module divider(a, b, out);
 	input [31:0] a;
 	input [31:0] b;
 	output [31:0] out;
-	output [1:0] of_uf;
 	
 	wire [31:0] b_reciprocal;
-	wire [1:0] reciprocal_of_uf;
-	wire [1:0] mult_of_uf;
-	reg [1:0] of_uf;
-	
 	reciprocal recip
 	(
 		.in(b),
-		.out(b_reciprocal),
-		.of_uf(reciprocal_of_uf)
+		.out(b_reciprocal)
 	);
 	
 	multiplier mult
 	(
 		.a(a),
 		.b(b_reciprocal),
-		.out(out),
-		.of_uf(mult_of_uf)
+		.out(out)
 	);
 	
-	always @(*) begin
-		if(reciprocal_of_uf != 2'b00) begin
-			of_uf = reciprocal_of_uf;
-		end else if(mult_of_uf != 2'b00) begin
-			of_uf = mult_of_uf;
-		end else begin
-			of_uf = 2'b00;
-		end
-	end
 endmodule
 
-module reciprocal(in, out, of_uf);
+module reciprocal(in, out);
 	// implementing Newton-Raphson as learnt from Wikipedia
 	input [31:0] in;
 	output [31:0] out;
-	output [1:0] of_uf;
-	
-	reg [1:0] of_uf;
 	
 	wire [31:0] D;
 	assign D = {1'b0, 8'h80, in[22:0]};
@@ -148,33 +69,23 @@ module reciprocal(in, out, of_uf);
 	
 	wire [31:0] S0_N0_in;
 	
-	wire [1:0] mult_S0_of_uf;
-	wire [1:0] add_S0_of_uf;
-	wire [1:0] mult1_S1_of_uf;
-	wire [1:0] mult2_S1_of_uf;
-	wire [1:0] add_S1_of_uf;
-	wire [1:0] mult1_S2_of_uf;
-	wire [1:0] mult2_S2_of_uf;
-	wire [1:0] add_S2_of_uf;
 	
 	
-	assign S0_N0_in = {~S0_2D_out[31]. S0_2D_out[30:0]};
+	assign S0_N0_in = {~S0_2D_out[31], S0_2D_out[30:0]};
 	
 	//S0 
 	multiplier S0_2D 
 	(
 		.a(C2),
 		.b(D),
-		.out(S0_2D_out),
-		.of_uf(mult_S0_of_uf)
+		.out(S0_2D_out)
 	);
 	
 	adder S0_N0 
 	(
 		.a(C1),
 		.b(S0_N0_in),
-		.out(N0),
-		.of_uf(add_S0_of_uf)
+		.out(N0)
 	);
 	
 	//S1
@@ -182,22 +93,19 @@ module reciprocal(in, out, of_uf);
 	(
 		.a(D),
 		.b(N0),
-		.out(S1_DN0_out),
-		.of_uf(mult1_S1_of_uf)
+		.out(S1_DN0_out)
 	);
 	adder S1_2minDN0
 	(
 		.a(C3),
 		.b({~S1_DN0_out[31], S1_DN0_out[30:0]}),
-		.out(S1_2min_DN0_out),
-		.of_uf(add_S1_of_uf)
+		.out(S1_2min_DN0_out)
 	);
 	multiplier S1_N1
 	(
 		.a(N0),
 		.b(S1_2min_DN0_out),
-		.out(N1),
-		.of_uf(mult2_S1_of_uf)
+		.out(N1)
 	);
 	
 	//S2 
@@ -205,52 +113,27 @@ module reciprocal(in, out, of_uf);
 	(
 		.a(D),
 		.b(N1),
-		.out(S2_DN1_out),
-		.of_uf(mult1_S2_of_uf)
+		.out(S2_DN1_out)
 	);
 	adder S2_2minDN1 
 	(
 		.a(C3),
 		.b({~S2_DN1_out[31], S2_DN1_out[30:0]}),
-		.out(S2_2minDN1_out),
-		.of_uf(add_S2_of_uf)
+		.out(S2_2minDN1_out)
 	);
 	multiplier S2_N2
 	(
 		.a(N1),
 		.b(S2_2minDN1_out),
-		.out(N2),
-		.of_uf(mult2_S2_of_uf)
+		.out(N2)
 	);
-	always @(*) begin
-		if(mult_S0_of_uf != 2'b00) begin
-			of_uf = mult_S0_of_uf;
-		end else if(add_S0_of_uf != 2'b00) begin
-			of_uf = add_S0_of_uf;
-		end else if(mult1_S1_of_uf != 2'b00) begin
-			of_uf = mult1_S1_of_uf;
-		end else if(add_S1_of_uf != 2'b00) begin
-			of_uf = add_S1_of_uf;
-		end else if(mult2_S1_of_uf != 2'b00) begin
-			of_uf = mult2_S1_of_uf;
-		end else if(mult1_S2_of_uf != 2'b00) begin
-			of_uf = mult1_S2_of_uf;
-		end else if(add_S2_of_uf != 2'b00) begin
-			of_uf = add_S2_of_uf;
-		end else if(mult2_S2_of_uf != 2'b00) begin
-			of_uf = mult2_S2_of_uf;
-		end else begin
-			of_uf = 2'b00;
-		end
-	end
+	
 endmodule
 
-module multiplier(a, b, out, of_uf);
+module multiplier(a, b, out);
 	input [31:0] a,b;
 	output [31:0] out;
-	output [1:0] of_uf;
 	
-	reg [1:0] of_uf;
 	
 	reg a_sign;
 	reg [7:0] a_exponent;
@@ -270,10 +153,10 @@ module multiplier(a, b, out, of_uf);
 	assign out[30:23] = o_exponent;
 	assign out[22:0] = o_mantissa[22:0];
 	
-	reg [7:0] i_e;
-	reg [24:0] i_m; // similarly
-	reg [7:0] o_e;
-	reg [24:0] o_m;
+	reg  [7:0] i_e;
+	reg  [47:0] i_m;
+	wire [7:0] o_e;
+	wire [47:0] o_m;
 	
 	multiplication_normalizer norm1
 	(
@@ -290,7 +173,7 @@ module multiplier(a, b, out, of_uf);
 			a_mantissa = {1'b0, a[22:0]};
 		end else begin
 			a_exponent = a[30:23];
-			a_mantissa = {1'b1, a[22:0]);
+			a_mantissa = {1'b1, a[22:0]};
 		end
 		
 		b_sign = b[31];
@@ -299,16 +182,11 @@ module multiplier(a, b, out, of_uf);
 			b_mantissa = {1'b0, b[22:0]};
 		end else begin
 			b_exponent = b[30:23];
-			b_mantissa = {1'b1, b[22:0]);
+			b_mantissa = {1'b1, b[22:0]};
 		end
 		o_sign = a_sign ^ b_sign; // XOR
 		o_exponent = a_exponent + b_exponent - 127;
-		if(o_exponent > 255) begin
-			of_uf = 2'b10;
-		end else if(o_exponent < 0) begin
-			of_uf = 2'b01;
-		end else begin
-			of_uf =2'b00;
+		
 			product = a_mantissa*b_mantissa;
 		
 			if(product[47] == 1) begin
@@ -322,7 +200,7 @@ module multiplier(a, b, out, of_uf);
 			end
 
 			o_mantissa = product[46:23];
-		end
+		
 		
 	end
 endmodule
@@ -359,12 +237,9 @@ module multiplication_normalizer(in_e, in_m, out_e, out_m);
 	end
 endmodule
 
-module adder(a, b, out, of_uf);
+module adder(a, b, out);
 	input [31:0] a, b;
 	output [31:0] out;
-	output [1:0] of_uf;
-	
-	reg [1:0] of_uf;
 	
 	reg a_sign;
 	reg [7:0] a_exponent;
@@ -384,8 +259,8 @@ module adder(a, b, out, of_uf);
 	
 	reg [7:0] i_e;
 	reg [24:0] i_m; // similarly
-	reg [7:0] o_e;
-	reg [24:0] o_m; // similarly
+	wire [7:0] o_e;
+	wire [24:0] o_m; // similarly
 	
 	addition_normalizer norm1
 	(
@@ -464,13 +339,6 @@ module adder(a, b, out, of_uf);
 			o_mantissa = o_m;
 		end
 		
-		if(o_exponent > 255) begin
-			of_uf = 2'b10;
-		end else if(o_exponent < 0) begin
-			of_uf = 2'b01;
-		end else begin
-			of_uf =2'b00;
-		end
 	end
 endmodule
 
@@ -549,6 +417,8 @@ module addition_normalizer(in_e, in_m, out_e, out_m);
 		end
 	end
 endmodule
+
+
 // Testbench
 module tb_Divider;
 	reg clk, reset;
@@ -557,7 +427,24 @@ module tb_Divider;
 	wire done;
 	wire [1:0] exception;
 	
+	// fpdiv myDivider(quotient, done, exception, a, b, clk, reset);
+	reciprocal myReci(a, quotient);
+
+	always@(clk)
+		#5 clk <= ~clk;
+		
+	always@(a, b, quotient, done, exception)
+		// $monitor($time," A = %b, B = %b, A/B = %b, Exception = %b, Done = %b", a, b, quotient, exception, done);	
+		
+		$monitor($time," A = %b, Reci = %b", a, quotient);	
+				
 	initial
 		begin
+			clk = 1'b1;
+			reset = 1'b0; 		
+			
+			
+			#5 a = 32'h40000000;
+			#400 $finish;
 		end
 endmodule

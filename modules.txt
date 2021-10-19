@@ -1,0 +1,7 @@
+fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
+divider(a, b, out);
+reciprocal(in, out);
+multiplier(a, b, out);
+multiplication_normalizer(in_e, in_m, out_e, out_m);
+adder(a, b, out);
+addition_normalizer(in_e, in_m, out_e, out_m);
