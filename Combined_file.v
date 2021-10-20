@@ -412,41 +412,33 @@ module tb_fp_div();
 		$monitor($time,"A = %h, B = %h, A/b = %h, Expected Result = %h",a_operand, b_operand, result, Expected_result);
 	always @(posedge clk) 
 	begin
-			// Case 1 Normal
+	
+	// For Reference:
+	// 00000000: 0
+	// 7f800000: +Infinity
+	// ff800000: -Infinity
+	// 7fc00000: NaN
+	
 			#6 $display("Case 1: Normal");
-			#6 a_operand = 32'h41c00000; b_operand = 32'h40c00000; Expected_result = 32'h40800000;
+			#6 a_operand = 32'h40a00000; b_operand = 32'h40000000; Expected_result = 32'h40200000;// 5 / 2 = 2.5
 			
-			#6 a_operand = 32'hc1f00000; b_operand = 32'h40a00000; Expected_result = 32'hc0c00000;
-			
-			#6 a_operand = 32'hc0a00000; b_operand = 32'hbe99999a; Expected_result = 32'h41855555;
-			
-			
-			// Case 2 Zeros
 			#6 $display("Case 2: Zeros");
-			// Divide by Zero
-			#6 a_operand = 32'h40000000; b_operand = 32'h00000000; Expected_result = 32'h7f800000;
-			// Zero by Zero
-			#6 a_operand = 32'h00000000; b_operand = 32'h00000000; Expected_result = 32'h7ff01000;
+			#6 a_operand = 32'h40000000; b_operand = 32'h00000000; Expected_result = 32'h7f800000;//      / Zero = Infinity
+			#6 a_operand = 32'h00000000; b_operand = 32'h00000000; Expected_result = 32'h7fc00000;// Zero / Zero = NaN
+			
+			#6 $display("Case 3: Infinity");
+			#6 a_operand = 32'h40000000; b_operand = 32'h7ff00000; Expected_result = 32'h00000000;//     / Infinity = Zero
+			#6 a_operand = 32'h7ff00000; b_operand = 32'h7ff00000; Expected_result = 32'h7fc00000;// Inf / Inf = NaN
+			
+			#6 $display("Case 4: Subnormal");
+			#6 a_operand = 32'h00000001; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
+						
+			#6 $display("Case 5: Overflow");
+			#6 a_operand = 32'h7f7fffff; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Largest Positive Normal / 2 ~ Inf [Overflow]
 			
 			
-			// Case 3 NaN
-			#6 $display("Case 3: NaN");
-			// Divide by NaN
-			#6 a_operand = 32'h40000000; b_operand = 32'h7ff80000; Expected_result = 32'h7f800000;
-			// NaN by NaN
-			#6 a_operand = 32'h7ff80000; b_operand = 32'h7ff80000; Expected_result = 32'h7ff01000;
-			
-			// Case 4 Infinity
-			#6 $display("Case 4: Infinity");
-			// Divide by Inf
-			#6 a_operand = 32'h40000000; b_operand = 32'h7ff00000; Expected_result = 32'h7f800000;
-			// Inf by Inf
-			#6 a_operand = 32'h7ff00000; b_operand = 32'h7ff00000; Expected_result = 32'h7ff01000;
-			
-			// Case 5 Subnormal
 			
 			
-			// Case 6 Overflow
 			# 60 $finish;
 
 			
