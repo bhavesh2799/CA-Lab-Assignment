@@ -1,58 +1,58 @@
-`define N_TESTS 100000
+module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 
-module Division(
-	input [31:0] a_operand,
-	input [31:0] b_operand,
-	output Exception,
-	output [31:0] result
-);
+	input CLOCK, RESET;
+	input [31:0] InputA, InputB;
+	output [31:0] AbyB;
+	output DONE;
+	output [1:0] EXCEPTION;
+	
+		
+	wire sign;
+	wire [7:0] shift;
+	wire [7:0] exponent_a;
+	wire [31:0] divisor;
+	wire [31:0] operand_a;
+	wire [31:0] Intermediate_X0;
+	wire [31:0] Iteration_X0;
+	wire [31:0] Iteration_X1;
+	wire [31:0] Iteration_X2;
+	wire [31:0] Iteration_X3;
+	wire [31:0] solution;
 
-wire sign;
-wire [7:0] shift;
-wire [7:0] exponent_a;
-wire [31:0] divisor;
-wire [31:0] operand_a;
-wire [31:0] Intermediate_X0;
-wire [31:0] Iteration_X0;
-wire [31:0] Iteration_X1;
-wire [31:0] Iteration_X2;
-wire [31:0] Iteration_X3;
-wire [31:0] solution;
+	wire [31:0] denominator;
+	wire [31:0] operand_a_change;
 
-wire [31:0] denominator;
-wire [31:0] operand_a_change;
+	assign EXCEPTION = (&InputA[30:23]) | (&InputB[30:23]);
 
-assign Exception = (&a_operand[30:23]) | (&b_operand[30:23]);
+	assign sign = InputA[31] ^ InputB[31];
 
-assign sign = a_operand[31] ^ b_operand[31];
+	assign shift = 8'd126 - InputB[30:23];
 
-assign shift = 8'd126 - b_operand[30:23];
+	assign divisor = {1'b0,8'd126,InputB[22:0]};
 
-assign divisor = {1'b0,8'd126,b_operand[22:0]};
+	assign denominator = divisor;
 
-assign denominator = divisor;
+	assign exponent_a = InputA[30:23] + shift;
 
-assign exponent_a = a_operand[30:23] + shift;
+	assign operand_a = {InputA[31],exponent_a,InputA[22:0]};
 
-assign operand_a = {a_operand[31],exponent_a,a_operand[22:0]};
+	assign operand_a_change = operand_a;
 
-assign operand_a_change = operand_a;
+	//32'hC00B_4B4B = (-37)/17
+	Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
 
-//32'hC00B_4B4B = (-37)/17
-Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
+	//32'h4034_B4B5 = 48/17
+	Addition_Subtraction X0(Intermediate_X0,32'h4034_B4B5,1'b0,,Iteration_X0);
 
-//32'h4034_B4B5 = 48/17
-Addition_Subtraction X0(Intermediate_X0,32'h4034_B4B5,1'b0,,Iteration_X0);
+	Iteration X1(Iteration_X0,divisor,Iteration_X1);
 
-Iteration X1(Iteration_X0,divisor,Iteration_X1);
+	Iteration X2(Iteration_X1,divisor,Iteration_X2);
 
-Iteration X2(Iteration_X1,divisor,Iteration_X2);
+	Iteration X3(Iteration_X2,divisor,Iteration_X3);
 
-Iteration X3(Iteration_X2,divisor,Iteration_X3);
+	Multiplication END(Iteration_X3,operand_a,,,,solution);
 
-Multiplication END(Iteration_X3,operand_a,,,,solution);
-
-assign result = {sign,solution[30:0]};
+	assign AbyB = {sign,solution[30:0]};
 endmodule
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -374,87 +374,56 @@ endmodule
 
 // TESTBENCH!!! 
 
-// module division_tb;
-
-	// reg clk = 0;
-	// reg [31:0] a_operand;
-	// reg [31:0] b_operand;
-	
-	// wire [31:0] result;
-	// wire Exception;
-
-	// reg [31:0] Expected_result;
-
-	// reg [95:0] testVector [`N_TESTS-1:0];
-
-	// reg test_stop_enable;
-
-	// integer mcd;
-	// integer test_n = 0;
-	// integer pass   = 0;
-	// integer error  = 0;
-
-	// Division DUT(a_operand,b_operand,Exception,result);
-
-	// always #5 clk = ~clk;
-
-	// initial  
-	// begin 
-		// $readmemh("TestVectorDivision", testVector);
-		// mcd = $fopen("ResultsDivision_Ver2.txt");
-	// end 
-
-	// always @(posedge clk) 
-	// begin
-			// {a_operand,b_operand,Expected_result} = testVector[test_n];
-			// test_n = test_n + 1'b1;
-
-			// #2;
-			// if (result[31:12] == Expected_result[31:12])
-				// begin
-					// $fdisplay (mcd,"TestPassed Test Number -> %d",test_n);
-					// pass = pass + 1'b1;
-				// end
-
-			// if (result[31:12] != Expected_result[31:12])
-				// begin
-					// $fdisplay (mcd,"Test Failed Expected Result = %h, Obtained result = %h, Test Number -> %d",Expected_result,result,test_n);
-					// error = error + 1'b1;
-				// end
-			
-			// if (test_n >= `N_TESTS) 
-			// begin
-				// $fdisplay(mcd,"Completed %d tests, %d passes and %d fails.", test_n, pass, error);
-				// test_stop_enable = 1'b1;
-			// end
-	// end
-
-// always @(posedge test_stop_enable)
-// begin
-// $fclose(mcd);
-// $finish;
-// end
-
-// endmodule
 
 module tb_fp_div();
- initial begin
- $display ("The Group Members are:");
- $display ("********************************************");
- $display ("2019A7PS0077P Aadit Deshpande");
- $display ("2019A7PS0123P Lakshya");
- $display ("2018B2A70699P Minu Rajeeve Payyapilly");
- $display ("2018B1A70657P Niharika Gupta");
- $display ("********************************************");
- end
+	 initial begin
+	 $display ("The Group Members are:");
+	 $display ("********************************************");
+	 $display ("2019A7PS0077P Aadit Deshpande");
+	 $display ("2019A7PS0123P Lakshya");
+	 $display ("2018B2A70699P Minu Rajeeve Payyapilly");
+	 $display ("2018B1A70657P Niharika Gupta");
+	 $display ("********************************************");
+	 end
 
- initial begin
- $display ("A few thigs about our design:");
- $display ("********************************************");
- $display ("It works on the Positive edge of the CLOCK signal");
- $display ("Will take 25 CLOCK cycles to complete the execution");
- $display ("We haven't used the guard bits");
- $display ("********************************************");
- end
+	 initial begin
+	 $display ("A few thigs about our design:");
+	 $display ("********************************************");
+	 $display ("It works on the Positive edge of the CLOCK signal");
+	 $display ("Will take 25 CLOCK cycles to complete the execution");
+	 $display ("We haven't used the guard bits");
+	 $display ("********************************************");
+	 end
+ 	reg clk = 0;
+	reg [31:0] a_operand;
+	reg [31:0] b_operand;
+	
+	wire [31:0] result;
+	wire [1:0] Exception;
+
+	reg [31:0] Expected_result;
+	// module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
+	fpdiv my_div(result,,Exception,a_operand, b_operand, clk,);
+
+	always #5 clk = ~clk;
+
+
+	always @(posedge clk) 
+	begin
+			// {a_operand,b_operand,Expected_result} = testVector[test_n];
+			a_operand = 32'h41c00000;
+			b_operand = 32'h40c00000;
+			Expected_result = 32'h40800000;
+			// test_n = test_n + 1'b1;
+			
+			#2	$display ("A = %h, B = %h, A/b = %h, Expected Result = %h",a_operand, b_operand, result, Expected_result);
+			
+			
+			# 60 $finish;
+
+			
+			
+	end
+
 
 endmodule
