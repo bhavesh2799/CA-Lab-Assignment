@@ -408,17 +408,45 @@ module tb_fp_div();
 	always #5 clk = ~clk;
 
 
+	always@(*)
+		$monitor($time,"A = %h, B = %h, A/b = %h, Expected Result = %h",a_operand, b_operand, result, Expected_result);
 	always @(posedge clk) 
 	begin
-			// {a_operand,b_operand,Expected_result} = testVector[test_n];
-			a_operand = 32'h41c00000;
-			b_operand = 32'h40c00000;
-			Expected_result = 32'h40800000;
-			// test_n = test_n + 1'b1;
+			// Case 1 Normal
+			#6 $display("Case 1: Normal");
+			#6 a_operand = 32'h41c00000; b_operand = 32'h40c00000; Expected_result = 32'h40800000;
 			
-			#2	$display ("A = %h, B = %h, A/b = %h, Expected Result = %h",a_operand, b_operand, result, Expected_result);
+			#6 a_operand = 32'hc1f00000; b_operand = 32'h40a00000; Expected_result = 32'hc0c00000;
+			
+			#6 a_operand = 32'hc0a00000; b_operand = 32'hbe99999a; Expected_result = 32'h41855555;
 			
 			
+			// Case 2 Zeros
+			#6 $display("Case 2: Zeros");
+			// Divide by Zero
+			#6 a_operand = 32'h40000000; b_operand = 32'h00000000; Expected_result = 32'h7f800000;
+			// Zero by Zero
+			#6 a_operand = 32'h00000000; b_operand = 32'h00000000; Expected_result = 32'h7ff01000;
+			
+			
+			// Case 3 NaN
+			#6 $display("Case 3: NaN");
+			// Divide by NaN
+			#6 a_operand = 32'h40000000; b_operand = 32'h7ff80000; Expected_result = 32'h7f800000;
+			// NaN by NaN
+			#6 a_operand = 32'h7ff80000; b_operand = 32'h7ff80000; Expected_result = 32'h7ff01000;
+			
+			// Case 4 Infinity
+			#6 $display("Case 4: Infinity");
+			// Divide by Inf
+			#6 a_operand = 32'h40000000; b_operand = 32'h7ff00000; Expected_result = 32'h7f800000;
+			// Inf by Inf
+			#6 a_operand = 32'h7ff00000; b_operand = 32'h7ff00000; Expected_result = 32'h7ff01000;
+			
+			// Case 5 Subnormal
+			
+			
+			// Case 6 Overflow
 			# 60 $finish;
 
 			
