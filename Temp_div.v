@@ -133,7 +133,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 		else if ((sol_exponent[8] == 1) && (sol_exponent < -127)) // Subnormal Numbers
 		begin
 			EXCEPTION = 2'b01;
-			ExSol = 32'h7fffffff;
+			ExSol = 32'h00000000;
 			force_output = 1'b1;
 			DONE = 1'b1;
 		end
@@ -461,7 +461,7 @@ module tb_fp_div();
 
 
 	always@(*)
-		$monitor($time,"A = %h, B = %h, A/b = %h, Exception = %b Expected Result = %h, sol_exponent=%b",a_operand, b_operand, result, Exception, Expected_result, sol_exponent);
+		$monitor($time,"A = %h, B = %h, A/b = %h, Exception = %b Expected Result = %h",a_operand, b_operand, result, Exception, Expected_result);
 	always @(posedge clk) 
 	begin
 	
@@ -487,7 +487,7 @@ module tb_fp_div();
 			
 			
 			#6 $display("Case 3: Overflow or Underflow");			
-			#6 a_operand = 32'h00195400; b_operand = 32'h7f7fffff; Expected_result = 32'h7f000000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
+			#6 a_operand = 32'h00195400; b_operand = 32'h7f7fffff; Expected_result = 32'h00000000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
 			#6 a_operand = 32'h7f7fffff; b_operand = 32'h00195400; Expected_result = 32'h7f800000;// Largest Positive Normal / Smallest Positive Normal ~ Inf [Overflow]
 			
 			
