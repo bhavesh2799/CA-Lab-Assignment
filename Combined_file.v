@@ -54,181 +54,171 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 
 	Iteration X3(Iteration_X2,divisor,Iteration_X3);
 	
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////
-	///------------------------------------------Multiplication BLOCK------------------------------------------//
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Multiplication block with reciprocal
 
 	Multiplication END(Iteration_X3,operand_a,,,,solution);
 
 	assign AbyB = {sign,solution[30:0]};
 endmodule
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-module Iteration(
+module Iteration(operand_1,operand_2,solution);
+
 	input [31:0] operand_1,
 	input [31:0] operand_2,
 	output [31:0] solution
-	);
 	
-/// THIS Module is to implement the newton-raphson iteration: X(i+1) = X(i)*(2-DX(i))
+	/// THIS Module is to implement the newton-raphson iteration: X(i+1) = X(i)*(2-DX(i))
 
-wire [31:0] Intermediate_Value1,Intermediate_Value2;
+	wire [31:0] Intermediate_Value1,Intermediate_Value2;
 
-Multiplication M1(operand_1,operand_2,,,,Intermediate_Value1);
+	Multiplication M1(operand_1,operand_2,,,,Intermediate_Value1);
 
-//32'h4000_0000 -> 2.
-Addition_Subtraction A1(32'h4000_0000,{1'b1,Intermediate_Value1[30:0]},1'b0,,Intermediate_Value2);
+	//32'h4000_0000 -> 2.
+	Addition_Subtraction A1(32'h4000_0000,{1'b1,Intermediate_Value1[30:0]},1'b0,,Intermediate_Value2);
 
-Multiplication M2(operand_1,Intermediate_Value2,,,,solution);
+	Multiplication M2(operand_1,Intermediate_Value2,,,,solution);
 
 endmodule
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+module Addition_Subtraction(a_operand,b_operand,AddBar_Sub,Exception,result);
 
-module Addition_Subtraction(
-input [31:0] a_operand,b_operand, //Inputs in the format of IEEE-754 Representation.
-input AddBar_Sub,				  //If Add_Sub is low then Addition else Subtraction.
-output Exception,
-output [31:0] result              //Outputs in the format of IEEE-754 Representation.
-);
+	// ADD:0, SUB: 1
+	input [31:0] a_operand,b_operand, 
+	input AddBar_Sub,				  
+	output Exception,
+	output [31:0] result 
+	
+	wire operation_sub_addBar;
+	wire Comp_enable;
+	wire output_sign;
 
-wire operation_sub_addBar;
-wire Comp_enable;
-wire output_sign;
-
-wire [31:0] operand_a,operand_b;
-wire [23:0] significand_a,significand_b;
-wire [7:0] exponent_diff;
-
-
-wire [23:0] significand_b_add_sub;
-wire [7:0] exponent_b_add_sub;
-
-wire [24:0] significand_add;
-wire [30:0] add_sum;
-
-wire [23:0] significand_sub_complement;
-wire [24:0] significand_sub;
-wire [30:0] sub_diff;
-wire [24:0] subtraction_diff; 
-wire [7:0] exponent_sub;
-
-//for operations always operand_a must not be less than b_operand
-assign {Comp_enable,operand_a,operand_b} = (a_operand[30:0] < b_operand[30:0]) ? {1'b1,b_operand,a_operand} : {1'b0,a_operand,b_operand};
-
-assign exp_a = operand_a[30:23];
-assign exp_b = operand_b[30:23];
-
-//Exception flag sets 1 if either one of the exponent is 255.
-assign Exception = (&operand_a[30:23]) | (&operand_b[30:23]);
-
-assign output_sign = AddBar_Sub ? Comp_enable ? !operand_a[31] : operand_a[31] : operand_a[31] ;
-
-assign operation_sub_addBar = AddBar_Sub ? operand_a[31] ^ operand_b[31] : ~(operand_a[31] ^ operand_b[31]);
-
-//Assigining significand values according to Hidden Bit.
-//If exponent is equal to zero then hidden bit will be 0 for that respective significand else it will be 1
-assign significand_a = (|operand_a[30:23]) ? {1'b1,operand_a[22:0]} : {1'b0,operand_a[22:0]};
-assign significand_b = (|operand_b[30:23]) ? {1'b1,operand_b[22:0]} : {1'b0,operand_b[22:0]};
-
-//Evaluating Exponent Difference
-assign exponent_diff = operand_a[30:23] - operand_b[30:23];
-
-//Shifting significand_b according to exponent_diff
-assign significand_b_add_sub = significand_b >> exponent_diff;
-
-assign exponent_b_add_sub = operand_b[30:23] + exponent_diff; 
-
-//Checking exponents are same or not
-assign perform = (operand_a[30:23] == exponent_b_add_sub);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//------------------------------------------------ADD BLOCK------------------------------------------//
-
-assign significand_add = (perform & operation_sub_addBar) ? (significand_a + significand_b_add_sub) : 25'd0; 
-
-//Result will be equal to Most 23 bits if carry generates else it will be Least 22 bits.
-assign add_sum[22:0] = significand_add[24] ? significand_add[23:1] : significand_add[22:0];
-
-//If carry generates in sum value then exponent must be added with 1 else feed as it is.
-assign add_sum[30:23] = significand_add[24] ? (1'b1 + operand_a[30:23]) : operand_a[30:23];
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//------------------------------------------------SUB BLOCK------------------------------------------//
-
-assign significand_sub_complement = (perform & !operation_sub_addBar) ? ~(significand_b_add_sub) + 24'd1 : 24'd0 ; 
-
-assign significand_sub = perform ? (significand_a + significand_sub_complement) : 25'd0;
-
-priority_encoder pe(significand_sub,operand_a[30:23],subtraction_diff,exponent_sub);
-
-assign sub_diff[30:23] = exponent_sub;
-
-assign sub_diff[22:0] = subtraction_diff[22:0];
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-//-------------------------------------------------OUTPUT--------------------------------------------//
-
-//If there is no exception and operation will evaluate
+	wire [31:0] operand_a,operand_b;
+	wire [23:0] significand_a,significand_b;
+	wire [7:0] exponent_diff;
 
 
-assign result = Exception ? 32'b0 : ((!operation_sub_addBar) ? {output_sign,sub_diff} : {output_sign,add_sum});
+	wire [23:0] significand_b_add_sub;
+	wire [7:0] exponent_b_add_sub;
+
+	wire [24:0] significand_add;
+	wire [30:0] add_sum;
+
+	wire [23:0] significand_sub_complement;
+	wire [24:0] significand_sub;
+	wire [30:0] sub_diff;
+	wire [24:0] subtraction_diff; 
+	wire [7:0] exponent_sub;
+
+	//for operations always operand_a must not be less than operand_b.
+	assign {Comp_enable,operand_a,operand_b} = (a_operand[30:0] < b_operand[30:0]) ? {1'b1,b_operand,a_operand} : {1'b0,a_operand,b_operand};
+
+	assign exp_a = operand_a[30:23];
+	assign exp_b = operand_b[30:23];
+
+	// [CHECK!!]: Refactoring Exception flag sets 1 if either one of the exponent is 255.
+	assign Exception = (&operand_a[30:23]) | (&operand_b[30:23]);
+
+	assign output_sign = AddBar_Sub ? Comp_enable ? !operand_a[31] : operand_a[31] : operand_a[31] ;
+
+	assign operation_sub_addBar = AddBar_Sub ? operand_a[31] ^ operand_b[31] : ~(operand_a[31] ^ operand_b[31]);
+
+	//Assigining significand values according to Hidden Bit == Significand Bit
+	//If exponent is equal to zero then hidden bit will be 0 for that respective significand else it will be 1
+	assign significand_a = (|operand_a[30:23]) ? {1'b1,operand_a[22:0]} : {1'b0,operand_a[22:0]};
+	assign significand_b = (|operand_b[30:23]) ? {1'b1,operand_b[22:0]} : {1'b0,operand_b[22:0]};
+
+	//Evaluating Exponent Difference
+	assign exponent_diff = operand_a[30:23] - operand_b[30:23];
+
+	//Shifting significand_b according to exponent_diff: pperand_b is smaller.
+	assign significand_b_add_sub = significand_b >> exponent_diff;
+
+	assign exponent_b_add_sub = operand_b[30:23] + exponent_diff; 
+
+	//Checking exponents are same or not
+	assign perform = (operand_a[30:23] == exponent_b_add_sub);
+
+	// ADD Operation
+	assign significand_add = (perform & operation_sub_addBar) ? (significand_a + significand_b_add_sub) : 25'd0; 
+	//Result will be equal to Most 23 bits if carry generates else it will be Least 22 bits.
+	assign add_sum[22:0] = significand_add[24] ? significand_add[23:1] : significand_add[22:0];
+
+	//If carry generates in sum value then exponent must be added with 1 else feed as it is.
+	assign add_sum[30:23] = significand_add[24] ? (1'b1 + operand_a[30:23]) : operand_a[30:23];
+
+	// Subtraction Block
+
+	assign significand_sub_complement = (perform & !operation_sub_addBar) ? ~(significand_b_add_sub) + 24'd1 : 24'd0 ; 
+
+	assign significand_sub = perform ? (significand_a + significand_sub_complement) : 25'd0;
+
+	priority_encoder pe(significand_sub,operand_a[30:23],subtraction_diff,exponent_sub);
+
+	assign sub_diff[30:23] = exponent_sub;
+
+	assign sub_diff[22:0] = subtraction_diff[22:0];
+
+	// [CHECK FOR Exception]Final output, evaluate under noexception
+	
+	assign result = Exception ? 32'b0 : ((!operation_sub_addBar) ? {output_sign,sub_diff} : {output_sign,add_sum});
 
 endmodule
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 module Multiplication(
-		input [31:0] a_operand,
-		input [31:0] b_operand,
-		output Exception,Overflow,Underflow,
-		output [31:0] result
-		);
+	input [31:0] a_operand,
+	input [31:0] b_operand,
+	output Exception,Overflow,Underflow,
+	output [31:0] result
+);
 
-wire sign,product_round,normalised,zero;
-wire [8:0] exponent,sum_exponent;
-wire [22:0] product_mantissa;
-wire [23:0] operand_a,operand_b;
-wire [47:0] product,product_normalised; //48 Bits
+	wire sign,product_round,normalised,zero;
+	wire [8:0] exponent,sum_exponent;
+	wire [22:0] product_mantissa;
+	wire [23:0] operand_a,operand_b;
+	//48 Bits = 24 bits + 24 bits
+	// As it's 1.Mantissa
+	wire [47:0] product,product_normalised; 
 
 
-assign sign = a_operand[31] ^ b_operand[31];
+	assign sign = a_operand[31] ^ b_operand[31];
 
-//Exception flag sets 1 if either one of the exponent is 255.
-assign Exception = (&a_operand[30:23]) | (&b_operand[30:23]);
+	//Exception flag sets 1 if either one of the exponent is 255.
+	assign Exception = (&a_operand[30:23]) | (&b_operand[30:23]);
 
-//Assigining significand values according to Hidden Bit.
-//If exponent is equal to zero then hidden bit will be 0 for that respective significand else it will be 1
+	//Assigining significand values according to Hidden Bit.
+	//If exponent is equal to zero then hidden bit will be 0 for that respective significand else it will be 1
 
-assign operand_a = (|a_operand[30:23]) ? {1'b1,a_operand[22:0]} : {1'b0,a_operand[22:0]};
+	assign operand_a = (|a_operand[30:23]) ? {1'b1,a_operand[22:0]} : {1'b0,a_operand[22:0]};
 
-assign operand_b = (|b_operand[30:23]) ? {1'b1,b_operand[22:0]} : {1'b0,b_operand[22:0]};
+	assign operand_b = (|b_operand[30:23]) ? {1'b1,b_operand[22:0]} : {1'b0,b_operand[22:0]};
 
-assign product = operand_a * operand_b;			//Calculating Product
+	assign product = operand_a * operand_b;			//Calculating Product
 
-assign product_round = |product_normalised[22:0];  //Ending 22 bits are OR'ed for rounding operation.
+	assign product_round = |product_normalised[22:0];  //Ending 22 bits are OR'ed for rounding operation.
 
-assign normalised = product[47] ? 1'b1 : 1'b0;	
+	assign normalised = product[47] ? 1'b1 : 1'b0;	
 
-assign product_normalised = normalised ? product : product << 1;	//Assigning Normalised value based on 48th bit
+	assign product_normalised = normalised ? product : product << 1;	//Assigning Normalised value based on 48th bit
 
-//Final Manitssa.
-assign product_mantissa = product_normalised[46:24] + {21'b0,(product_normalised[23] & product_round)};
+	//Final Manitssa.
+	assign product_mantissa = product_normalised[46:24] + {21'b0,(product_normalised[23] & product_round)};
 
-assign zero = Exception ? 1'b0 : (product_mantissa == 23'd0) ? 1'b1 : 1'b0;
+	assign zero = Exception ? 1'b0 : (product_mantissa == 23'd0) ? 1'b1 : 1'b0;
 
-assign sum_exponent = a_operand[30:23] + b_operand[30:23];
+	assign sum_exponent = a_operand[30:23] + b_operand[30:23];
 
-assign exponent = sum_exponent - 8'd127 + normalised;
+	assign exponent = sum_exponent - 8'd127 + normalised;
 
-assign Overflow = ((exponent[8] & !exponent[7]) & !zero) ; //If overall exponent is greater than 255 then Overflow condition.
-//Exception Case when exponent reaches its maximu value that is 384.
+	assign Overflow = ((exponent[8] & !exponent[7]) & !zero) ; //If overall exponent is greater than 255 then Overflow condition.
+	//Exception Case when exponent reaches its maximu value that is 384.
 
-//If sum of both exponents is less than 127 then Underflow condition.
-assign Underflow = ((exponent[8] & exponent[7]) & !zero) ? 1'b1 : 1'b0; 
+	//If sum of both exponents is less than 127 then Underflow condition.
+	assign Underflow = ((exponent[8] & exponent[7]) & !zero) ? 1'b1 : 1'b0; 
 
-assign result = Exception ? 32'd0 : zero ? {sign,31'd0} : Overflow ? {sign,8'hFF,23'd0} : Underflow ? {sign,31'd0} : {sign,exponent[7:0],product_mantissa};
+	assign result = Exception ? 32'd0 : zero ? {sign,31'd0} : Overflow ? {sign,8'hFF,23'd0} : Underflow ? {sign,31'd0} : {sign,exponent[7:0],product_mantissa};
 
 
 endmodule
