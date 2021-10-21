@@ -1,12 +1,11 @@
 module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 
-	input CLOCK, RESET;
+	input CLOCK, RESET; // Active High
 	input [31:0] InputA, InputB;
 	output [31:0] AbyB;
 	output DONE;
-	output [1:0] EXCEPTION;
+	output reg [1:0] EXCEPTION;
 	
-		
 	wire sign;
 	wire [7:0] shift;
 	wire [7:0] exponent_a;
@@ -22,7 +21,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	wire [31:0] denominator;
 	wire [31:0] operand_a_change;
 
-	assign EXCEPTION = (&InputA[30:23]) | (&InputB[30:23]);
+	// assign EXCEPTION = (&InputA[30:23]) | (&InputB[30:23]);
 
 	assign sign = InputA[31] ^ InputB[31];
 
@@ -38,7 +37,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 
 	assign operand_a_change = operand_a;
 	
-	// Reciprocal Block
+	// Reciprocal Block: Newton-Raphson  Algorithm
 	//32'hC00B_4B4B = (-37)/17
 	Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
 
@@ -59,14 +58,41 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	Multiplication END(Iteration_X3,operand_a,,,,solution);
 
 	assign AbyB = {sign,solution[30:0]};
+	
+	always @* 
+	begin
+		EXCEPTION = 2'bxx;
+		// GIVE RESULTS FOR ALL!!!
+		
+		// 00: Divide Normal by Zero
+		if ((0 < InputA[30:23] && 255 > InputA[30:23]) && InputB[31:0] == 32'h00000000)
+			EXCEPTION = 2'b00;
+		
+		// 11: Invalid Operands
+		else if (((InputA[30:23] == 255) && (InputA[22:0] != 23'b0)) || ((InputB[30:23] == 255) && (InputB[22:0] != 23'b0))) // A NaN or B NaN (r= NaN)
+			EXCEPTION = 2'b11;
+		else if (((InputA[30:23] == 255) && (InputA[22:0] == 23'b0)) && ((InputB[30:23] == 255) && (InputB[22:0] == 23'b0))) // A Inf and B Inf (r= NaN)
+			EXCEPTION = 2'b11;
+		else if (((InputA[30:23] == 255) && (InputA[22:0] == 23'b0))) // A Inf and B normal
+			begin
+			if (InputB[31:0] == 32'h00000000) // B Zero (r= NaN)
+				EXCEPTION = 2'b11;
+			else // B normal (r= inf)
+				EXCEPTION = 2'b11;
+			end 
+		else if (((InputB[30:23] == 255) && (InputB[22:0] == 23'b0))) // B Inf (r= Zero)
+				EXCEPTION = 2'b11;
+		else if ((InputA[31:0] == 32'h00000000) && (InputB[31:0] == 32'h00000000)) // A Zero and B Zero (r= NaN)
+				EXCEPTION = 2'b11;
+	end
 endmodule
 
 
 module Iteration(operand_1,operand_2,solution);
 
-	input [31:0] operand_1,
-	input [31:0] operand_2,
-	output [31:0] solution
+	input [31:0] operand_1;
+	input [31:0] operand_2;
+	output [31:0] solution;
 	
 	/// THIS Module is to implement the newton-raphson iteration: X(i+1) = X(i)*(2-DX(i))
 
@@ -84,10 +110,10 @@ endmodule
 module Addition_Subtraction(a_operand,b_operand,AddBar_Sub,Exception,result);
 
 	// ADD:0, SUB: 1
-	input [31:0] a_operand,b_operand, 
-	input AddBar_Sub,				  
-	output Exception,
-	output [31:0] result 
+	input [31:0] a_operand,b_operand;
+	input AddBar_Sub;			  
+	output Exception;
+	output [31:0] result; 
 	
 	wire operation_sub_addBar;
 	wire Comp_enable;
@@ -409,7 +435,7 @@ module tb_fp_div();
 
 
 	always@(*)
-		$monitor($time,"A = %h, B = %h, A/b = %h, Expected Result = %h",a_operand, b_operand, result, Expected_result);
+		$monitor($time,"A = %h, B = %h, A/b = %h, Exception = %b Expected Result = %h",a_operand, b_operand, result, Exception, Expected_result);
 	always @(posedge clk) 
 	begin
 	
@@ -422,18 +448,20 @@ module tb_fp_div();
 			#6 $display("Case 1: Normal");
 			#6 a_operand = 32'h40a00000; b_operand = 32'h40000000; Expected_result = 32'h40200000;// 5 / 2 = 2.5
 			
-			#6 $display("Case 2: Zeros");
-			#6 a_operand = 32'h40000000; b_operand = 32'h00000000; Expected_result = 32'h7f800000;//      / Zero = Infinity
+			#6 $display("Case 2: Divide by Zero");
+			#6 a_operand = 32'h40000000; b_operand = 32'h00000000; Expected_result = 32'h7f800000;// 2 / Zero = Infinity
+			
+			#6 $display("Case 3: Invalid Operands");
+			#6 a_operand = 32'h7fc00000; b_operand = 32'h7fc00000; Expected_result = 32'h7fc00000;// NaN / NaN = NaN
+			#6 a_operand = 32'h7f800000; b_operand = 32'h7f800000; Expected_result = 32'h7fc00000;// Inf / Inf = NaN
+			#6 a_operand = 32'h7f800000; b_operand = 32'h00000000; Expected_result = 32'h7fc00000;// Inf / Zero = NaN
+			#6 a_operand = 32'h7f800000; b_operand = 32'h40000000; Expected_result = 32'h7fc00000;// Inf / 2 = Inf
+			#6 a_operand = 32'h40000000; b_operand = 32'h7f800000; Expected_result = 32'h00000000;//  2 / Inf = Zero
 			#6 a_operand = 32'h00000000; b_operand = 32'h00000000; Expected_result = 32'h7fc00000;// Zero / Zero = NaN
 			
-			#6 $display("Case 3: Infinity");
-			#6 a_operand = 32'h40000000; b_operand = 32'h7ff00000; Expected_result = 32'h00000000;//     / Infinity = Zero
-			#6 a_operand = 32'h7ff00000; b_operand = 32'h7ff00000; Expected_result = 32'h7fc00000;// Inf / Inf = NaN
 			
-			#6 $display("Case 4: Subnormal");
+			#6 $display("Case 3: Overflow or Underflow");
 			#6 a_operand = 32'h00000001; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
-						
-			#6 $display("Case 5: Overflow");
 			#6 a_operand = 32'h7f7fffff; b_operand = 32'h00800000; Expected_result = 32'h7f800000;// Largest Positive Normal / Smallest Positive Normal ~ Inf [Overflow]
 			
 			
