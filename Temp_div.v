@@ -22,7 +22,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	wire [31:0] denominator;
 	wire [31:0] operand_a_change;
 	
-	wire [9:0] sol_exponent;
+	wire [7:0] sol_exponent;
 	
 	assign sign = InputA[31] ^ InputB[31];
 	assign shift = 8'd126 - InputB[30:23];
@@ -31,7 +31,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	assign exponent_a = InputA[30:23] + shift;
 	assign operand_a = {InputA[31],exponent_a,InputA[22:0]};
 	assign operand_a_change = operand_a;
-	assign sol_exponent = InputA[30:23] - InputB[30:23] + 8'd127;
+	assign sol_exponent = (InputA[30:23] - InputB[30:23]);
 	
 	// Reciprocal Block: Newton-Raphson  Algorithm
 	//32'hC00B_4B4B = (-37)/17
@@ -82,10 +82,10 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 		else if ((InputA[31:0] == 32'h00000000) && (InputB[31:0] == 32'h00000000)) // A Zero and B Zero (r= NaN)
 				EXCEPTION = 2'b11;
 		// 10: Overflow		
-		else if (sol_exponent > 9'd255) // Overflow
+		else if (sol_exponent > 127) // Overflow
 				EXCEPTION = 2'b10;
 		// 01: Underflow
-		else if (sol_exponent < 9'd0) // Subnormal Numbers
+		else if (sol_exponent < -127) // Subnormal Numbers
 				EXCEPTION = 2'b01;
 	end
 	
@@ -390,24 +390,24 @@ endmodule
 
 
 module tb_fp_div();
-	 initial begin
-	 $display ("The Group Members are:");
-	 $display ("********************************************");
-	 $display ("2019A7PS0077P Aadit Deshpande");
-	 $display ("2019A7PS0123P Lakshya");
-	 $display ("2018B2A70699P Minu Rajeeve Payyapilly");
-	 $display ("2018B1A70657P Niharika Gupta");
-	 $display ("********************************************");
-	 end
+	 // initial begin
+	 // $display ("The Group Members are:");
+	 // $display ("********************************************");
+	 // $display ("2019A7PS0077P Aadit Deshpande");
+	 // $display ("2019A7PS0123P Lakshya");
+	 // $display ("2018B2A70699P Minu Rajeeve Payyapilly");
+	 // $display ("2018B1A70657P Niharika Gupta");
+	 // $display ("********************************************");
+	 // end
 
-	 initial begin
-	 $display ("A few thigs about our design:");
-	 $display ("********************************************");
-	 $display ("It works on the Positive edge of the CLOCK signal");
-	 $display ("Will take 25 CLOCK cycles to complete the execution");
-	 $display ("We haven't used the guard bits");
-	 $display ("********************************************");
-	 end
+	 // initial begin
+	 // $display ("A few thigs about our design:");
+	 // $display ("********************************************");
+	 // $display ("It works on the Positive edge of the CLOCK signal");
+	 // $display ("Will take 25 CLOCK cycles to complete the execution");
+	 // $display ("We haven't used the guard bits");
+	 // $display ("********************************************");
+	 // end
  	reg clk = 0;
 	reg [31:0] a_operand;
 	reg [31:0] b_operand;
@@ -419,11 +419,12 @@ module tb_fp_div();
 	// module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	fpdiv my_div(result,,Exception,a_operand, b_operand, clk,);
 
+
 	always #5 clk = ~clk;
 
 
 	always@(*)
-		$monitor($time,"A = %h, B = %h, A/b = %h, Exception = %b Expected Result = %h",a_operand, b_operand, result, Exception, Expected_result);
+		$monitor($time,"A = %h, B = %h, A/b = %h, Exception = %b Expected Result = %h, sol_exponent=%b",a_operand, b_operand, result, Exception, Expected_result);
 	always @(posedge clk) 
 	begin
 	
