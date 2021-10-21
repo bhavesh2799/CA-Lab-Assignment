@@ -37,18 +37,28 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	assign operand_a = {InputA[31],exponent_a,InputA[22:0]};
 
 	assign operand_a_change = operand_a;
-
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///------------------------------------------RECIPROCAL BLOCK------------------------------------------//
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
 	//32'hC00B_4B4B = (-37)/17
 	Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
 
 	//32'h4034_B4B5 = 48/17
 	Addition_Subtraction X0(Intermediate_X0,32'h4034_B4B5,1'b0,,Iteration_X0);
+	
+	// The above part is to choose a better X(0), for which we need to minimize the absolute error in approximation
+	// of 1/D, we do X(0) = 48/17 - (32/17)*D'. Where D' is the number scaled to between 0.5 and 1.
 
 	Iteration X1(Iteration_X0,divisor,Iteration_X1);
 
 	Iteration X2(Iteration_X1,divisor,Iteration_X2);
 
 	Iteration X3(Iteration_X2,divisor,Iteration_X3);
+	
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///------------------------------------------Multiplication BLOCK------------------------------------------//
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Multiplication END(Iteration_X3,operand_a,,,,solution);
 
@@ -62,6 +72,8 @@ module Iteration(
 	input [31:0] operand_2,
 	output [31:0] solution
 	);
+	
+/// THIS Module is to implement the newton-raphson iteration: X(i+1) = X(i)*(2-DX(i))
 
 wire [31:0] Intermediate_Value1,Intermediate_Value2;
 
