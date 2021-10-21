@@ -6,6 +6,7 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	output DONE;
 	output reg [1:0] EXCEPTION;
 	
+	reg [31:0] ExSol;
 	wire sign;
 	wire [7:0] shift;
 	wire [7:0] exponent_a;
@@ -20,26 +21,22 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 
 	wire [31:0] denominator;
 	wire [31:0] operand_a_change;
+	wire o1, u1;
+	
+	wire o2, u2;
 
-	// assign EXCEPTION = (&InputA[30:23]) | (&InputB[30:23]);
 
 	assign sign = InputA[31] ^ InputB[31];
-
 	assign shift = 8'd126 - InputB[30:23];
-
 	assign divisor = {1'b0,8'd126,InputB[22:0]};
-
 	assign denominator = divisor;
-
 	assign exponent_a = InputA[30:23] + shift;
-
 	assign operand_a = {InputA[31],exponent_a,InputA[22:0]};
-
 	assign operand_a_change = operand_a;
 	
 	// Reciprocal Block: Newton-Raphson  Algorithm
 	//32'hC00B_4B4B = (-37)/17
-	Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
+	Multiplication x0(32'hC00B_4B4B,divisor,,o2,u2,Intermediate_X0);
 
 	//32'h4034_B4B5 = 48/17
 	Addition_Subtraction X0(Intermediate_X0,32'h4034_B4B5,1'b0,,Iteration_X0);
@@ -48,14 +45,12 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	// of 1/D, we do X(0) = 48/17 - (32/17)*D'. Where D' is the number scaled to between 0.5 and 1.
 
 	Iteration X1(Iteration_X0,divisor,Iteration_X1);
-
 	Iteration X2(Iteration_X1,divisor,Iteration_X2);
-
 	Iteration X3(Iteration_X2,divisor,Iteration_X3);
 	
 	// Multiplication block with reciprocal
 
-	Multiplication END(Iteration_X3,operand_a,,,,solution);
+	Multiplication END(Iteration_X3,operand_a,,o1,u1,solution);
 
 	assign AbyB = {sign,solution[30:0]};
 	
@@ -65,9 +60,12 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 		// GIVE RESULTS FOR ALL!!!
 		
 		// 00: Divide Normal by Zero
-		if ((0 < InputA[30:23] && 255 > InputA[30:23]) && InputB[31:0] == 32'h00000000)
+		if ((0 < InputA[30:23] && 255 > InputA[30:23]) && InputB[31:0] == 32'h00000000) 
+		begin
 			EXCEPTION = 2'b00;
-		
+			ExSol = 32'h7f800000;
+			// AbyB = ExSol;
+		end
 		// 11: Invalid Operands
 		else if (((InputA[30:23] == 255) && (InputA[22:0] != 23'b0)) || ((InputB[30:23] == 255) && (InputB[22:0] != 23'b0))) // A NaN or B NaN (r= NaN)
 			EXCEPTION = 2'b11;
@@ -84,7 +82,16 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 				EXCEPTION = 2'b11;
 		else if ((InputA[31:0] == 32'h00000000) && (InputB[31:0] == 32'h00000000)) // A Zero and B Zero (r= NaN)
 				EXCEPTION = 2'b11;
+		// 10: Overflow		
+		else if (o1 || o2) // Overflow
+				EXCEPTION = 2'b10;
+		// 01: Underflow
+		else if (u1 || u2) // Subnormal Numbers
+				EXCEPTION = 2'b01;
 	end
+	
+	
+	
 endmodule
 
 
@@ -97,12 +104,10 @@ module Iteration(operand_1,operand_2,solution);
 	/// THIS Module is to implement the newton-raphson iteration: X(i+1) = X(i)*(2-DX(i))
 
 	wire [31:0] Intermediate_Value1,Intermediate_Value2;
-
 	Multiplication M1(operand_1,operand_2,,,,Intermediate_Value1);
 
 	//32'h4000_0000 -> 2.
 	Addition_Subtraction A1(32'h4000_0000,{1'b1,Intermediate_Value1[30:0]},1'b0,,Intermediate_Value2);
-
 	Multiplication M2(operand_1,Intermediate_Value2,,,,solution);
 
 endmodule
@@ -144,9 +149,7 @@ module Addition_Subtraction(a_operand,b_operand,AddBar_Sub,Exception,result);
 
 	// [CHECK!!]: Refactoring Exception flag sets 1 if either one of the exponent is 255.
 	assign Exception = (&operand_a[30:23]) | (&operand_b[30:23]);
-
 	assign output_sign = AddBar_Sub ? Comp_enable ? !operand_a[31] : operand_a[31] : operand_a[31] ;
-
 	assign operation_sub_addBar = AddBar_Sub ? operand_a[31] ^ operand_b[31] : ~(operand_a[31] ^ operand_b[31]);
 
 	//Assigining significand values according to Hidden Bit == Significand Bit
@@ -176,13 +179,9 @@ module Addition_Subtraction(a_operand,b_operand,AddBar_Sub,Exception,result);
 	// Subtraction Block
 
 	assign significand_sub_complement = (perform & !operation_sub_addBar) ? ~(significand_b_add_sub) + 24'd1 : 24'd0 ; 
-
 	assign significand_sub = perform ? (significand_a + significand_sub_complement) : 25'd0;
-
 	priority_encoder pe(significand_sub,operand_a[30:23],subtraction_diff,exponent_sub);
-
 	assign sub_diff[30:23] = exponent_sub;
-
 	assign sub_diff[22:0] = subtraction_diff[22:0];
 
 	// [CHECK FOR Exception]Final output, evaluate under noexception
@@ -191,15 +190,13 @@ module Addition_Subtraction(a_operand,b_operand,AddBar_Sub,Exception,result);
 
 endmodule
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+module Multiplication(a_operand, b_operand, Exception, Overflow, Underflow, result);
 
-module Multiplication(
-	input [31:0] a_operand,
-	input [31:0] b_operand,
-	output Exception,Overflow,Underflow,
-	output [31:0] result
-);
-
+	input [31:0] a_operand;
+	input [31:0] b_operand;
+	output Exception,Overflow,Underflow;
+	output [31:0] result;
+	
 	wire sign,product_round,normalised,zero;
 	wire [8:0] exponent,sum_exponent;
 	wire [22:0] product_mantissa;
@@ -218,24 +215,16 @@ module Multiplication(
 	//If exponent is equal to zero then hidden bit will be 0 for that respective significand else it will be 1
 
 	assign operand_a = (|a_operand[30:23]) ? {1'b1,a_operand[22:0]} : {1'b0,a_operand[22:0]};
-
 	assign operand_b = (|b_operand[30:23]) ? {1'b1,b_operand[22:0]} : {1'b0,b_operand[22:0]};
-
 	assign product = operand_a * operand_b;			//Calculating Product
-
 	assign product_round = |product_normalised[22:0];  //Ending 22 bits are OR'ed for rounding operation.
-
 	assign normalised = product[47] ? 1'b1 : 1'b0;	
-
 	assign product_normalised = normalised ? product : product << 1;	//Assigning Normalised value based on 48th bit
 
 	//Final Manitssa.
 	assign product_mantissa = product_normalised[46:24] + {21'b0,(product_normalised[23] & product_round)};
-
 	assign zero = Exception ? 1'b0 : (product_mantissa == 23'd0) ? 1'b1 : 1'b0;
-
 	assign sum_exponent = a_operand[30:23] + b_operand[30:23];
-
 	assign exponent = sum_exponent - 8'd127 + normalised;
 
 	assign Overflow = ((exponent[8] & !exponent[7]) & !zero) ; //If overall exponent is greater than 255 then Overflow condition.
@@ -460,10 +449,9 @@ module tb_fp_div();
 			#6 a_operand = 32'h00000000; b_operand = 32'h00000000; Expected_result = 32'h7fc00000;// Zero / Zero = NaN
 			
 			
-			#6 $display("Case 3: Overflow or Underflow");
-			#6 a_operand = 32'h00000001; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
-			#6 a_operand = 32'h7f7fffff; b_operand = 32'h00800000; Expected_result = 32'h7f800000;// Largest Positive Normal / Smallest Positive Normal ~ Inf [Overflow]
-			
+			#6 $display("Case 3: Overflow or Underflow");			
+			#6 a_operand = 32'h00195400; b_operand = 32'h7f7fffff; Expected_result = 32'h7f800000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
+			#6 a_operand = 32'h7f7fffff; b_operand = 32'h00195400; Expected_result = 32'h7f800000;// Largest Positive Normal / Smallest Positive Normal ~ Inf [Overflow]
 			
 			
 			
