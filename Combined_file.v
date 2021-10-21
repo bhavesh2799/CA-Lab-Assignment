@@ -61,7 +61,14 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 		// GIVE RESULTS FOR ALL!!!
 		
 		// 00: Divide Normal by Zero
-		if ((0 < InputA[30:23] && 255 > InputA[30:23]) && InputB[31:0] == 32'h00000000) 
+		if(RESET) 
+		begin
+			EXCEPTION = 2'bxx;
+			DONE = 1'b0;
+			force_output = 1'b0;
+			ExSol = 32'bx;
+		end
+		else if ((0 < InputA[30:23] && 255 > InputA[30:23]) && InputB[31:0] == 32'h00000000) 
 		begin
 			EXCEPTION = 2'b00;
 			ExSol = 32'h7f800000;
@@ -438,6 +445,7 @@ module tb_fp_div();
  	reg clk = 0;
 	reg [31:0] a_operand;
 	reg [31:0] b_operand;
+	reg reset;
 	
 	wire [31:0] result;
 	wire [1:0] Exception;
@@ -446,7 +454,7 @@ module tb_fp_div();
 
 	reg [31:0] Expected_result;
 	// module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
-	fpdiv my_div(result,,Exception,a_operand, b_operand, clk,);
+	fpdiv my_div(result,,Exception,a_operand, b_operand, clk,reset);
 
 
 	always #5 clk = ~clk;
