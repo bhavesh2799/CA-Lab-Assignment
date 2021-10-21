@@ -37,10 +37,8 @@ module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB, CLOCK, RESET);
 	assign operand_a = {InputA[31],exponent_a,InputA[22:0]};
 
 	assign operand_a_change = operand_a;
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////
-	///------------------------------------------RECIPROCAL BLOCK------------------------------------------//
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
+	// Reciprocal Block
 	//32'hC00B_4B4B = (-37)/17
 	Multiplication x0(32'hC00B_4B4B,divisor,,,,Intermediate_X0);
 
@@ -446,7 +444,7 @@ module tb_fp_div();
 			#6 a_operand = 32'h00000001; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Smallest Positive Subnormal / 2 ~ Zero [Underflow]
 						
 			#6 $display("Case 5: Overflow");
-			#6 a_operand = 32'h7f7fffff; b_operand = 32'h40000000; Expected_result = 32'h7f800000;// Largest Positive Normal / 2 ~ Inf [Overflow]
+			#6 a_operand = 32'h7f7fffff; b_operand = 32'h00800000; Expected_result = 32'h7f800000;// Largest Positive Normal / Smallest Positive Normal ~ Inf [Overflow]
 			
 			
 			
